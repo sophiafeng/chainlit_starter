@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from langfuse.decorators import observe
 from langfuse.openai import AsyncOpenAI
-from movie_functions import get_now_playing_movies, get_showtimes, buy_ticket
+from movie_functions import get_now_playing_movies, get_showtimes, buy_ticket, confirm_ticket_purchase
 
 
 load_dotenv()
@@ -31,7 +31,8 @@ The possible function names are:
     - buy_ticket(theater, movie, showtime)
     - confirm_ticket_purchase(theater, movie, showtime)
 
-For example, if you need a list of movies, generate a function call, as shown below. Make sure to include the rationale for the function call.
+When user wants to buy a ticket, make sure to confirm with the user on the ticket details before confirming the ticket purchase.
+For example, if you need a list of movies, generate a function call, as shown below. Make sure to always include rationale for all function calls.
 
 {
     "function_name": "get_now_playing_movies",
@@ -72,6 +73,7 @@ async def on_message(message: cl.Message):
     message_history.append({"role": "user", "content": message.content})
     
     while True:
+        print("\n\n\n----------------loop----------------\n\n\n")
         response_message = await generate_response(client, message_history, gen_kwargs)
         print(f"Response message: {response_message.content}")
 
@@ -92,11 +94,11 @@ async def on_message(message: cl.Message):
                     
                     # Handle the function call
                     if function_name == "get_now_playing_movies":
-                        print("Calling get_now_playing_movies")
+                        print("\n\n\n====Calling get_now_playing_movies====\n\n\n")
                         movies = get_now_playing_movies()
                         message_history.append({"role": "system", "content": f"Function call rationale: {rationale}\n\n{movies}"})
                     elif function_name == "get_showtimes":
-                        print("Calling get_showtimes")
+                        print("\n\n\n====Calling get_showtimes====\n\n\n")
                         if "parameters" in function_call_json and "title" in function_call_json["parameters"] and "location" in function_call_json["parameters"]:
                             showtimes = get_showtimes(function_call_json["parameters"]["title"], function_call_json["parameters"]["location"])
                             message_history.append({"role": "system", "content": f"Function call rationale: {rationale}\n\n{showtimes}"})   
@@ -107,16 +109,25 @@ async def on_message(message: cl.Message):
                             print("BREAK LOOP: Invalid function call format. Breaking out of loop.")
                             break
                     elif function_name == "buy_ticket":
-                        print("Calling buy_ticket")
+                        print("\n\n\n====Calling buy_ticket====\n\n\n")
                         if "parameters" in function_call_json and "theater" in function_call_json["parameters"] and "movie" in function_call_json["parameters"] and "showtime" in function_call_json["parameters"]:
                             confirmation = buy_ticket(function_call_json["parameters"]["theater"], function_call_json["parameters"]["movie"], function_call_json["parameters"]["showtime"])
-                            message_history.append({"role": "system", "content": f"Function call rationale: {rationale}\n\n{confirmation}"})   
+                            message_history.append({"role": "system", "content": f"Function call rationale: {rationale}\n\n{confirmation}.\n\nbuying a ticket for {function_call_json['parameters']['movie']} at {function_call_json['parameters']['theater']} for {function_call_json['parameters']['showtime']}. Confirm these details with the user and ask if they want to proceed before confirming ticket purchase."})   
                         else:
                             error_message = "Invalid function call format"
                             message_history.append({"role": "system", "content": error_message})
                             await cl.Message(content=error_message).send()
                             print("BREAK LOOP: Invalid function call format. Breaking out of loop.")
                             break
+                    elif function_name == "confirm_ticket_purchase":
+                        print("\n\n\n====Calling confirm_ticket_purchase====\n\n\n")
+                        if "parameters" in function_call_json and "theater" in function_call_json["parameters"] and "movie" in function_call_json["parameters"] and "showtime" in function_call_json["parameters"]:
+                            confirmation = confirm_ticket_purchase(function_call_json["parameters"]["theater"], function_call_json["parameters"]["movie"], function_call_json["parameters"]["showtime"])
+                            message_history.append({"role": "system", "content": f"Function call rationale: {rationale}\n\n{confirmation}"})   
+                        else:
+                            error_message = "Invalid function call format"
+                            message_history.append({"role": "system", "content": error_message})
+                            await cl.Message(content=error_message).send()
                     else:
                         # Handle unknown function calls
                         error_message = f"Unknown function: {function_name}"
@@ -134,13 +145,11 @@ async def on_message(message: cl.Message):
             except json.JSONDecodeError:
                 # If it's not valid JSON, treat it as a normal message
                 message_history.append({"role": "assistant", "content": response_message.content})
-                await cl.Message(content=response_message.content).send()
                 print("BREAK LOOP: No JSON found in response message. Breaking out of loop.")
                 break
         else:
             # If no JSON is found, treat it as a normal message
             message_history.append({"role": "assistant", "content": response_message.content})
-            await cl.Message(content=response_message.content).send()
             print("BREAK LOOP:No JSON found in response message. Breaking out of loop.")
             break
 

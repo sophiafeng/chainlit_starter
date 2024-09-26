@@ -72,6 +72,9 @@ def get_showtimes(title, location):
     return formatted_showtimes
 
 def buy_ticket(theater, movie, showtime):
+    return f"User wants to buy a ticket for {movie} at {theater} for {showtime}."
+
+def confirm_ticket_purchase(theater, movie, showtime):
     return f"Ticket purchased for {movie} at {theater} for {showtime}."
 
 def get_reviews(movie_id):
